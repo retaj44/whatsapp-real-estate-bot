@@ -169,7 +169,7 @@ def generate_ai_response(user_message):
     - إذا كانت الرسالة تحتوي على مزيج من اللغتين، اعتمد على اللغة الأكثر استخداماً في رسالة العميل.
     """
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"role": "user", "parts": [{"text": user_message}]}]
