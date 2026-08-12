@@ -11,13 +11,13 @@ app = Flask(__name__)
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "my_custom_secure_verify_token_123")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # تحقق سريع عند التشغيل: لو نسيت تحط أي متغير، يوقفك فوراً بدل ما يفشل بصمت لاحقاً
 missing = [name for name, val in [
     ("WHATSAPP_TOKEN", WHATSAPP_TOKEN),
     ("PHONE_NUMBER_ID", PHONE_NUMBER_ID),
-    ("OPENAI_API_KEY", OPENAI_API_KEY),
+    ("GEMINI_API_KEY", GEMINI_API_KEY),
 ] if not val]
 if missing:
     raise SystemExit(f"❌ ناقصة متغيرات البيئة التالية: {', '.join(missing)}. راجع خطوات التشغيل.")
@@ -154,11 +154,6 @@ def webhook_listener():
 def generate_ai_response(user_message):
     db_context = get_all_properties_context()
 
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
     system_prompt = f"""
     أنت مساعد عقاري ذكي ومحترف في السوق السعودي.
     اعتمد في إجابتك على قراءة القائمة التالية من العقارات المتاحة فقط وإعطاء تفاصيلها للعميل عند الطلب:
@@ -166,27 +161,29 @@ def generate_ai_response(user_message):
     {db_context}
 
     إذا طلب العميل عقاراً غير موجود بالقائمة، أبلغه بلباقة بعدم توفره حالياً واعرض عليه خيارات قريبة.
+
+    مهم جداً بخصوص اللغة:
+    - إذا كتب العميل رسالته بالعربية، رد عليه بالعربية فقط.
+    - إذا كتب العميل رسالته بالإنجليزية، رد عليه بالإنجليزية فقط.
+    - لا تخلط بين اللغتين في نفس الرد أبداً.
+    - إذا كانت الرسالة تحتوي على مزيج من اللغتين، اعتمد على اللغة الأكثر استخداماً في رسالة العميل.
     """
 
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
-        ]
+        "system_instruction": {"parts": [{"text": system_prompt}]},
+        "contents": [{"role": "user", "parts": [{"text": user_message}]}]
     }
 
     try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            json=payload, headers=headers, timeout=20
-        )
+        response = requests.post(url, json=payload, timeout=20)
         if response.status_code == 200:
-            return response.json()['choices'][0]['message']['content']
-        print("❌ OpenAI Error:", response.status_code, response.text)
+            data = response.json()
+            return data['candidates'][0]['content']['parts'][0]['text']
+        print("❌ Gemini Error:", response.status_code, response.text)
         return "أهلاً بك! كيف يمكنني مساعدتك في طلباتك العقارية اليوم؟"
     except Exception as e:
-        print("❌ OpenAI Exception:", e)
+        print("❌ Gemini Exception:", e)
         return "أهلاً بك! يسعدني خدمتك."
 
 def send_whatsapp_message(recipient_number, message_text):
